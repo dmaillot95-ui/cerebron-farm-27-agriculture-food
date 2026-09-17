@@ -1,0 +1,87 @@
+name: CEREBRON Farm 27 Agriculture Food
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  agents:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {role: AGRONOMY_SYSTEMS_SPECIALIST, model: huggingface-projects/llama-3.2-3B-Instruct, focus: crop systems and agronomy}
+          - {role: SOIL_SCIENCE_SPECIALIST, model: huggingface-projects/gemma-2-9b-it, focus: soils fertility structure biology}
+          - {role: IRRIGATION_WATER_SPECIALIST, model: huggingface-projects/llama-3.2-3B-Instruct, focus: irrigation water efficiency salinity}
+          - {role: PLANT_GENETICS_BREEDING_SPECIALIST, model: huggingface-projects/gemma-2-9b-it, focus: plant genetics breeding resilience}
+          - {role: CROP_PROTECTION_SPECIALIST, model: huggingface-projects/llama-3.2-3B-Instruct, focus: pests diseases integrated protection}
+          - {role: LIVESTOCK_SYSTEMS_SPECIALIST, model: huggingface-projects/gemma-2-9b-it, focus: livestock systems welfare productivity}
+          - {role: AQUACULTURE_SPECIALIST, model: huggingface-projects/llama-3.2-3B-Instruct, focus: aquaculture health feed water systems}
+          - {role: AGROECOLOGY_SPECIALIST, model: huggingface-projects/gemma-2-9b-it, focus: agroecology biodiversity ecosystem services}
+          - {role: PRECISION_AGRICULTURE_SPECIALIST, model: huggingface-projects/llama-3.2-3B-Instruct, focus: sensors robotics remote sensing precision farming}
+          - {role: FOOD_SCIENCE_SPECIALIST, model: huggingface-projects/gemma-2-9b-it, focus: food science chemistry microbiology quality}
+          - {role: FOOD_PROCESSING_ENGINEER, model: huggingface-projects/llama-3.2-3B-Instruct, focus: processing preservation industrial operations}
+          - {role: FOOD_SAFETY_AUDITOR, model: huggingface-projects/gemma-2-9b-it, focus: food safety hazards traceability controls}
+          - {role: COLD_CHAIN_LOGISTICS_SPECIALIST, model: huggingface-projects/llama-3.2-3B-Instruct, focus: cold chain storage logistics losses}
+          - {role: AGRIFOOD_SUPPLY_CHAIN_ANALYST, model: huggingface-projects/gemma-2-9b-it, focus: supply chain resilience bottlenecks tradeoffs}
+          - {role: AGRICULTURAL_ECONOMICS_ANALYST, model: huggingface-projects/llama-3.2-3B-Instruct, focus: farm economics inputs margins markets}
+          - {role: CLIMATE_RESILIENCE_AGRICULTURE_SPECIALIST, model: huggingface-projects/gemma-2-9b-it, focus: drought heat flood climate adaptation}
+          - {role: YIELD_VALIDITY_AUDITOR, model: huggingface-projects/llama-3.2-3B-Instruct, focus: yield evidence experimental design transfer limits}
+          - {role: RED_TEAM_AGRIFOOD, model: huggingface-projects/gemma-2-9b-it, focus: falsification failure modes unintended effects}
+          - {role: INDEPENDENT_REPLICATOR, model: huggingface-projects/llama-3.2-3B-Instruct, focus: independent replication and consistency checking}
+          - {role: OMEGA_AGRIFOOD_JUDGE, model: huggingface-projects/gemma-2-9b-it, focus: evidence bounded synthesis and unresolved unknowns}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -q hf-gradio
+      - name: Run role
+        env:
+          ROLE: ${{ matrix.role }}
+          MODEL: ${{ matrix.model }}
+          FOCUS: ${{ matrix.focus }}
+        run: python worker/farm_worker.py
+        continue-on-error: true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: farm27-${{ matrix.role }}
+          path: results/${{ matrix.role }}.json
+
+  omega:
+    needs: agents
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: farm27-*
+          path: collected
+          merge-multiple: true
+      - name: Fuse evidence packet
+        run: |
+          python - <<'PY'
+          import json,glob,os
+          docs=[]
+          for p in glob.glob('collected/*.json'):
+              try: docs.append(json.load(open(p)))
+              except: pass
+          packet={
+            'farm':27,
+            'name':'Agriculture Food',
+            'epistemic_status':'UNREVIEWED_EXTERNAL_AGENT_OUTPUT',
+            'roles_returned':len(docs),
+            'successful_external_ai_calls':sum(bool(x.get('inference_success')) for x in docs),
+            'model_families':sorted(set(x.get('model','') for x in docs)),
+            'rules':['CLAIM<=EVIDENCE','FIELD RESULT!=UNIVERSAL RESULT','MODEL!=REALITY','VERIFY BEFORE COMMIT'],
+            'results':docs
+          }
+          os.makedirs('omega',exist_ok=True)
+          json.dump(packet,open('omega/farm27-omega.json','w'),ensure_ascii=False,indent=2)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agriculture-food-farm-27-omega-packet
+          path: omega/farm27-omega.json
